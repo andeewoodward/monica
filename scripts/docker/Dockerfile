@@ -6,7 +6,7 @@
 ### This file is based off of the `apache` variant in the above mentioned repo
 ###
 
-FROM php:8.1-apache
+FROM php:8.2-apache
 
 # opencontainers annotations https://github.com/opencontainers/image-spec/blob/master/annotations.md
 LABEL org.opencontainers.image.authors="Alexis Saettler <alexis@saettler.org>" \
@@ -61,10 +61,18 @@ RUN set -ex; \
         soap \
     ; \
     \
-# pecl will claim success even if one install fails, so we need to perform each install separately
-    pecl install APCu; \
-    pecl install memcached; \
-    pecl install redis; \
+# pecl will claim success even if one install fails, so we perform each install separately.
+# channel-update refreshes pecl.php.net REST metadata (fixes "does not have REST info xml
+# available"); the retry loop guards against transient network failures during the build.
+    pecl channel-update pecl.php.net; \
+    for ext in apcu memcached redis; do \
+        for try in 1 2 3; do \
+            pecl install "$ext" && break; \
+            [ "$try" = 3 ] && exit 1; \
+            echo ">>> pecl install $ext failed, retrying ($try)..."; \
+            sleep 10; \
+        done; \
+    done; \
     \
     docker-php-ext-enable \
         apcu \
@@ -76,7 +84,7 @@ RUN set -ex; \
     apt-mark auto '.*' > /dev/null; \
     apt-mark manual $savedAptMark; \
         ldd "$(php -r 'echo ini_get("extension_dir");')"/*.so \
-        | awk '/=>/ { print $3 }' \
+        | awk '/=>/ { so = $(NF-1); if (index(so, "/usr/local/") == 1) { next }; gsub("^/(usr/)?", "", so); print so }' \
         | sort -u \
         | xargs -r dpkg-query -S \
         | cut -d: -f1 \
@@ -161,16 +169,20 @@ RUN set -ex; \
     composer clear-cache; \
     rm -rf .composer
 
-# Install node dependencies
+# Install node (Debian 13 ships Node 20), build front-end assets, then drop the
+# build toolchain so it doesn't bloat the final image.
 RUN set -ex; \
     \
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -; \
-    apt-get install -y nodejs; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends nodejs npm; \
     npm install -g yarn; \
     yarn run inst; \
     yarn run dev; \
     \
-    rm -rf /var/lib/apt/lists/*
+    yarn cache clean; \
+    npm uninstall -g yarn; \
+    apt-get purge -y --auto-remove nodejs npm; \
+    rm -rf node_modules /root/.npm /root/.cache /root/.yarn /var/lib/apt/lists/*
 
 COPY scripts/docker/entrypoint.sh \
     scripts/docker/cron.sh \
