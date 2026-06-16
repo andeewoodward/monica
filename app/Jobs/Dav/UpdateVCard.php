@@ -7,6 +7,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use App\Services\VCard\GetEtag;
+use App\Models\Contact\Contact;
 use App\Services\VCard\ImportVCard;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Queue\SerializesModels;
@@ -107,6 +108,17 @@ class UpdateVCard implements ShouldQueue
                 ]);
 
             if (! Arr::has($result, 'error')) {
+                // Ensure contact UUID matches the CardDAV resource URI.
+                // iOS may use a different UUID for the PUT URI vs the vCard UID.
+                // The resource URI must be authoritative to prevent duplicates.
+                if ($cardUri) {
+                    $uriUuid = $backend->getUuid($cardUri);
+                    $contact = Contact::find($result['contact_id']);
+                    if ($contact && $contact->getAttributes()['uuid'] !== $uriUuid) {
+                        $contact->forceFill(['uuid' => $uriUuid])->save();
+                    }
+                }
+
                 return app(GetEtag::class)->execute([
                     'account_id' => $this->user->account_id,
                     'contact_id' => $result['contact_id'],

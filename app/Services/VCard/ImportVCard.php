@@ -2,7 +2,6 @@
 
 namespace App\Services\VCard;
 
-use Ramsey\Uuid\Uuid;
 use App\Models\User\User;
 use App\Traits\DAVFormat;
 use Sabre\VObject\Reader;
@@ -516,13 +515,17 @@ class ImportVCard extends BaseService
      */
     private function existingUuid(VCard $entry): ?Contact
     {
-        return ! empty($uuid = (string) $entry->UID) && Uuid::isValid($uuid)
-            ? Contact::where([
+        $uid = trim((string) $entry->UID);
+
+        if (! empty($uid)) {
+            return Contact::where([
                 'account_id' => $this->accountId,
-                'uuid' => $uuid,
+                'uuid' => $uid,
                 'address_book_id' => $this->addressBook ? $this->addressBook->id : null,
-            ])->first()
-            : null;
+            ])->first();
+        }
+
+        return null;
     }
 
     /**
@@ -575,8 +578,11 @@ class ImportVCard extends BaseService
         $contactData = $this->importGender($contactData, $entry);
         $contactData = $this->importBirthday($contactData, $entry);
 
-        if ($contact !== null && $contactData !== $original) {
-            $contact = app(UpdateContact::class)->execute($contactData);
+        if ($contact !== null) {
+            if ($contactData !== $original) {
+                $contact = app(UpdateContact::class)->execute($contactData);
+            }
+            // else: contact exists, no general info changed - keep existing
         } else {
             $contact = app(CreateContact::class)->execute($contactData);
         }
@@ -773,8 +779,10 @@ class ImportVCard extends BaseService
      */
     private function importUid(array $contactData, VCard $entry): array
     {
-        if (! empty($uuid = (string) $entry->UID) && Uuid::isValid($uuid)) {
-            $contactData['uuid'] = $uuid;
+        $uid = trim((string) $entry->UID);
+
+        if (! empty($uid)) {
+            $contactData['uuid'] = $uid;
         }
 
         return $contactData;

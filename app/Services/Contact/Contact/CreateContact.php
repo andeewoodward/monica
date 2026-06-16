@@ -2,7 +2,6 @@
 
 namespace App\Services\Contact\Contact;
 
-use Ramsey\Uuid\Uuid;
 use App\Models\User\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
@@ -124,7 +123,7 @@ class CreateContact extends BaseService
             ]
         );
 
-        if (! empty($uuid = Arr::get($data, 'uuid')) && Uuid::isValid($uuid)) {
+        if (! empty($uuid = Arr::get($data, 'uuid'))) {
             $dataOnly['uuid'] = $uuid;
         }
 

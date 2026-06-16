@@ -2,7 +2,6 @@
 
 namespace App\Services\Contact\Contact;
 
-use Ramsey\Uuid\Uuid;
 use Illuminate\Support\Arr;
 use App\Services\BaseService;
 use App\Helpers\AccountHelper;
@@ -112,7 +111,7 @@ class UpdateContact extends BaseService
             ]
         );
 
-        if (! empty($uuid = Arr::get($this->data, 'uuid')) && Uuid::isValid($uuid)) {
+        if (! empty($uuid = Arr::get($this->data, 'uuid'))) {
             $dataOnly['uuid'] = $uuid;
         }
 
